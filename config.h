@@ -26,11 +26,11 @@
 #define KEY4_PIN      33
 
 // ============ API 参数 ============
-#define MAX_TOKENS    1024
+#define MAX_TOKENS    256
 #define TEMPERATURE   1.0
 #define TOP_P         0.95
 
 // ============ 对话历史 ============
-#define MAX_HISTORY   2  // 保留最近N轮对话
+#define MAX_HISTORY   0  // 不保留历史，每次只发单条消息
 
 #endif // CONFIG_H
