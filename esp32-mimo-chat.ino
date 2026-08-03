@@ -100,11 +100,13 @@ void startWiFi() {
   Serial.print("[WIFI] Connecting to ");
   Serial.println(WIFI_SSID);
   
-  // Set static IP to avoid DHCP issues
+  // Set static IP + DNS to avoid DHCP/DNS issues
   IPAddress local_IP(192, 168, 43, 100);    // Static IP
-  IPAddress gateway(192, 168, 43, 1);       // Gateway (usually hotspot IP)
+  IPAddress gateway(192, 168, 43, 1);       // Gateway (hotspot IP)
   IPAddress subnet(255, 255, 255, 0);       // Subnet mask
-  WiFi.config(local_IP, gateway, subnet);
+  IPAddress primaryDNS(8, 8, 8, 8);         // Google DNS
+  IPAddress secondaryDNS(114, 114, 114, 114); // 114 DNS
+  WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS);
   
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   
