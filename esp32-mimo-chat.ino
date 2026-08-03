@@ -101,8 +101,8 @@ void startWiFi() {
   Serial.println(WIFI_SSID);
   
   // Set static IP + DNS to avoid DHCP/DNS issues
-  IPAddress local_IP(192, 168, 43, 100);    // Static IP
-  IPAddress gateway(192, 168, 43, 1);       // Gateway (Xiaomi hotspot)
+  IPAddress local_IP(192, 168, 137, 100);   // Static IP
+  IPAddress gateway(192, 168, 137, 1);      // Gateway (Windows hotspot)
   IPAddress subnet(255, 255, 255, 0);       // Subnet mask
   IPAddress primaryDNS(8, 8, 8, 8);         // Google DNS
   IPAddress secondaryDNS(114, 114, 114, 114); // 114 DNS
