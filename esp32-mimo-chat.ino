@@ -13,6 +13,10 @@
 #include <Adafruit_SSD1306.h>
 #include "config.h"
 
+// Disable brownout detector (WiFi RF draws 240-500mA, USB may not supply enough)
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
+
 // ============ Global Objects ============
 Adafruit_SSD1306 display(OLED_WIDTH, OLED_HEIGHT, &Wire, -1);
 
@@ -30,9 +34,12 @@ String systemPrompt = "You are MiMo, an AI assistant by Xiaomi. Answer concisely
 bool wifiConnected = false;
 bool waitingResponse = false;
 String inputBuffer = "";
+unsigned long wifiCheckTime = 0;
+int wifiStatus = WL_IDLE_STATUS;
 
 // ============ Function Declarations ============
-void setupWiFi();
+void startWiFi();
+void checkWiFi();
 void setupOLED();
 void setupKeys();
 void oledShowLine(int line, const String& text);
@@ -51,8 +58,11 @@ void handleKeys();
 //  SETUP
 // ============================================================
 void setup() {
+  // Disable brownout detector FIRST to prevent WiFi reboot
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+  
   Serial.begin(SERIAL_BAUD);
-  delay(100);
+  delay(500);
   
   Serial.println();
   Serial.println("================================");
@@ -64,61 +74,107 @@ void setup() {
   setupOLED();
   setupKeys();
   
+  // Start WiFi (non-blocking)
   oledShowStatus("Connecting WiFi...");
-  setupWiFi();
-  
-  if (wifiConnected) {
-    oledShowStatus("WiFi Connected");
-    delay(500);
-    oledClear();
-    oledShowLine(0, "MiMo Chat Ready!");
-    oledShowLine(2, "Waiting input...");
-    
-    Serial.println("[OK] System ready. Type message and press Enter:");
-    Serial.println();
-  } else {
-    oledShowStatus("WiFi Failed!");
-    Serial.println("[ERR] WiFi connect failed");
-  }
+  startWiFi();
   
   historyCount = 0;
   addToHistory("system", systemPrompt);
+  
+  Serial.println("[OK] System started");
+  Serial.println("[OK] WiFi connecting in background...");
+  Serial.println();
 }
 
 // ============================================================
 //  LOOP
 // ============================================================
 void loop() {
+  checkWiFi();
   handleSerialInput();
   handleKeys();
 }
 
 // ============================================================
-//  WiFi Setup
+//  WiFi - Non-blocking
 // ============================================================
-void setupWiFi() {
-  Serial.print("[WIFI] Connecting: ");
+void startWiFi() {
+  Serial.print("[WIFI] Starting: ");
   Serial.println(WIFI_SSID);
   
   WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
-    delay(1000);
-    Serial.print(".");
-    attempts++;
-  }
-  Serial.println();
+  wifiCheckTime = millis();
+  wifiStatus = WL_IDLE_STATUS;
+}
+
+void checkWiFi() {
+  // Check every 1 second
+  if (millis() - wifiCheckTime < 1000) return;
+  wifiCheckTime = millis();
   
-  if (WiFi.status() == WL_CONNECTED) {
-    wifiConnected = true;
-    Serial.println("[WIFI] Connected");
-    Serial.print("[WIFI] IP: ");
-    Serial.println(WiFi.localIP());
-  } else {
-    wifiConnected = false;
-    Serial.println("[WIFI] Failed");
+  int currentStatus = WiFi.status();
+  
+  // Status changed
+  if (currentStatus != wifiStatus) {
+    wifiStatus = currentStatus;
+    
+    switch (wifiStatus) {
+      case WL_CONNECTED:
+        if (!wifiConnected) {
+          wifiConnected = true;
+          Serial.println("[WIFI] Connected!");
+          Serial.print("[WIFI] IP: ");
+          Serial.println(WiFi.localIP());
+          Serial.print("[WIFI] RSSI: ");
+          Serial.println(WiFi.RSSI());
+          
+          oledClear();
+          oledShowLine(0, "WiFi Connected!");
+          oledShowLine(1, "IP: " + WiFi.localIP().toString());
+          oledShowLine(3, "MiMo Chat Ready!");
+          oledShowLine(5, "Waiting input...");
+          
+          Serial.println("[OK] System ready. Type message:");
+          Serial.println();
+        }
+        break;
+        
+      case WL_DISCONNECTED:
+      case WL_CONNECT_FAILED:
+      case WL_NO_SSID_AVAIL:
+        if (wifiConnected) {
+          wifiConnected = false;
+          Serial.println("[WIFI] Disconnected!");
+          oledShowStatus("WiFi Lost!");
+        } else {
+          Serial.print("[WIFI] Status: ");
+          Serial.println(wifiStatus);
+          oledShowStatus("WiFi status: " + String(wifiStatus));
+        }
+        break;
+        
+      case WL_IDLE_STATUS:
+        Serial.print("[WIFI] Connecting...");
+        oledShowStatus("Connecting...");
+        break;
+        
+      default:
+        Serial.print("[WIFI] Status: ");
+        Serial.println(wifiStatus);
+        break;
+    }
+  }
+  
+  // Show dots while connecting
+  if (wifiStatus != WL_CONNECTED) {
+    static int dots = 0;
+    dots = (dots + 1) % 4;
+    String dotStr = "";
+    for (int i = 0; i < dots; i++) dotStr += ".";
+    Serial.println("[WIFI] Waiting" + dotStr);
   }
 }
 
@@ -216,6 +272,14 @@ void handleSerialInput() {
         inputBuffer.trim();
         
         if (inputBuffer.length() > 0) {
+          // Check WiFi before sending
+          if (!wifiConnected || WiFi.status() != WL_CONNECTED) {
+            Serial.println("[ERR] WiFi not connected yet");
+            Serial.println("[...] Please wait for WiFi...");
+            inputBuffer = "";
+            return;
+          }
+          
           Serial.println();
           Serial.print("[YOU] ");
           Serial.println(inputBuffer);
@@ -273,9 +337,13 @@ void handleKeys() {
   
   if (k1 == LOW && lastKey1 == HIGH) {
     lastKeyTime = millis();
-    Serial.println("[KEY1] Send 'Hello'");
-    inputBuffer = "Hello";
-    Serial.println(inputBuffer);
+    if (wifiConnected) {
+      Serial.println("[KEY1] Send 'Hello'");
+      inputBuffer = "Hello";
+      Serial.println(inputBuffer);
+    } else {
+      Serial.println("[KEY1] WiFi not ready");
+    }
   }
   
   if (k2 == LOW && lastKey2 == HIGH) {
@@ -284,14 +352,16 @@ void handleKeys() {
     Serial.println("[KEY2] History cleared");
     oledShowStatus("History cleared");
     delay(500);
-    oledShowLine(2, "Waiting input...");
+    oledShowLine(5, "Waiting input...");
   }
   
   if (k3 == LOW && lastKey3 == HIGH) {
     lastKeyTime = millis();
     Serial.println("[KEY3] Status:");
     Serial.print("  WiFi: ");
-    Serial.println(wifiConnected ? "OK" : "FAIL");
+    Serial.println(wifiConnected ? "Connected" : "Disconnected");
+    Serial.print("  Status code: ");
+    Serial.println(WiFi.status());
     Serial.print("  History: ");
     Serial.println(historyCount);
     Serial.print("  Heap: ");
@@ -300,24 +370,19 @@ void handleKeys() {
     oledClear();
     oledShowLine(0, "Status:");
     oledShowLine(1, "WiFi: " + String(wifiConnected ? "OK" : "FAIL"));
-    oledShowLine(2, "History: " + String(historyCount));
-    oledShowLine(3, "Heap: " + String(ESP.getFreeHeap()));
+    oledShowLine(2, "Code: " + String(WiFi.status()));
+    oledShowLine(3, "History: " + String(historyCount));
+    oledShowLine(4, "Heap: " + String(ESP.getFreeHeap()));
     delay(2000);
-    oledShowLine(2, "Waiting input...");
+    oledShowLine(5, "Waiting input...");
   }
   
   if (k4 == LOW && lastKey4 == HIGH) {
     lastKeyTime = millis();
     Serial.println("[KEY4] Reconnect WiFi");
-    oledShowStatus("Reconnecting...");
-    setupWiFi();
-    if (wifiConnected) {
-      oledShowStatus("WiFi Connected");
-    } else {
-      oledShowStatus("WiFi Failed!");
-    }
-    delay(1000);
-    oledShowLine(2, "Waiting input...");
+    WiFi.disconnect();
+    delay(100);
+    startWiFi();
   }
   
   lastKey1 = k1;
