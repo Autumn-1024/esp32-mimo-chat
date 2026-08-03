@@ -551,5 +551,17 @@ String callMiMoAPI(const String& userInput) {
   Serial.print(elapsed);
   Serial.println(" ms");
   
-  return result;
+  // Print result before restart
+  if (result.length() > 0) {
+    Serial.println();
+    Serial.print("[MIMO] ");
+    Serial.println(result);
+    Serial.println();
+  }
+  
+  // Restart to free TLS memory (ESP32 heap too small for repeated HTTPS)
+  Serial.println("[SYS] Restarting to free memory...");
+  delay(100);
+  ESP.restart();
+  return result; // never reached
 }
