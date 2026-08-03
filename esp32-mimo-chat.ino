@@ -250,7 +250,7 @@ void handleSerialInput() {
         inputBuffer.trim();
         
         if (inputBuffer.length() > 0) {
-          if (!wifiConnected || WiFi.status() != WL_CONNECTED) {
+          if (!wifiConnected) {
             Serial.println("[ERR] WiFi not connected yet");
             inputBuffer = "";
             return;
@@ -445,9 +445,8 @@ String extractContent(const String& json) {
 //  Call MiMo API
 // ============================================================
 String callMiMoAPI(const String& userInput) {
-  if (!wifiConnected || WiFi.status() != WL_CONNECTED) {
+  if (!wifiConnected) {
     Serial.println("[ERR] WiFi not connected");
-    wifiConnected = false;
     return "";
   }
   
