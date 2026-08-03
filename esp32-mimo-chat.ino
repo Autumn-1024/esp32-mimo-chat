@@ -102,7 +102,8 @@ void startWiFi() {
   
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   
-  while (WiFi.status() != WL_CONNECTED)
+  // Wait until we get a valid IP address (ignore WiFi.status() bug)
+  while (WiFi.localIP().toString() == "0.0.0.0")
   {
     delay(500);
     Serial.print(".");
