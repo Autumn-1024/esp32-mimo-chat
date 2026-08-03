@@ -100,9 +100,15 @@ void startWiFi() {
   Serial.print("[WIFI] Connecting to ");
   Serial.println(WIFI_SSID);
   
+  // Set static IP to avoid DHCP issues
+  IPAddress local_IP(192, 168, 43, 100);    // Static IP
+  IPAddress gateway(192, 168, 43, 1);       // Gateway (usually hotspot IP)
+  IPAddress subnet(255, 255, 255, 0);       // Subnet mask
+  WiFi.config(local_IP, gateway, subnet);
+  
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   
-  // Wait until we get a valid IP address (ignore WiFi.status() bug)
+  // Wait until we get a valid IP address
   while (WiFi.localIP().toString() == "0.0.0.0")
   {
     delay(500);
