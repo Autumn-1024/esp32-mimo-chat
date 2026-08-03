@@ -103,6 +103,7 @@ void startWiFi() {
   Serial.println(WIFI_SSID);
   
   WiFi.mode(WIFI_STA);
+  WiFi.setTxPower(WIFI_POWER_5dBm);  // Reduce TX power to prevent brownout
   WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   
