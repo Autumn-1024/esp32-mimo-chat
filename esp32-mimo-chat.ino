@@ -32,7 +32,7 @@ unsigned long wifiCheckTime = 0;
 int displayState = DISP_READY;
 
 // ============ OLED Display ============
-void updateDisplay() {
+void updateDisplay(const char* statusOverride = NULL) {
   display.clearDisplay();
 
   // Line 1: Title (large, centered)
@@ -58,12 +58,16 @@ void updateDisplay() {
   // Status area
   display.setTextSize(1);
   const char* statusText = "";
-  switch (displayState) {
-    case DISP_READY:    statusText = ">> Ready <<"; break;
-    case DISP_THINKING: statusText = "Thinking..."; break;
-    case DISP_REPLYING: statusText = "Replying..."; break;
-    case DISP_GPIO_OK:  statusText = "GPIO OK"; break;
-    case DISP_ERROR:    statusText = "Error!"; break;
+  if (statusOverride) {
+    statusText = statusOverride;
+  } else {
+    switch (displayState) {
+      case DISP_READY:    statusText = ">> Ready <<"; break;
+      case DISP_THINKING: statusText = "Thinking"; break;
+      case DISP_REPLYING: statusText = "Replying"; break;
+      case DISP_GPIO_OK:  statusText = "GPIO OK"; break;
+      case DISP_ERROR:    statusText = "Error!"; break;
+    }
   }
   // Center status text
   int16_t x1, y1;
@@ -279,9 +283,20 @@ String callMiMoAPI(const String& userInput) {
   secureClient.print(requestBody);
   requestBody = "";
 
-  // Wait for response
+  // Wait for response (with thinking animation)
   unsigned long timeout = millis() + 30000;
-  while (!secureClient.available() && millis() < timeout) delay(10);
+  unsigned long animTime = 0;
+  int dotCount = 0;
+  while (!secureClient.available() && millis() < timeout) {
+    if (millis() - animTime > 400) {
+      animTime = millis();
+      dotCount = (dotCount + 1) % 4;  // 0,1,2,3 -> "", ".", "..", "..."
+      String dots = "Thinking";
+      for (int d = 0; d < dotCount; d++) dots += ".";
+      updateDisplay(dots.c_str());
+    }
+    delay(50);
+  }
   if (!secureClient.available()) {
     Serial.println("[ERR] Timeout");
     secureClient.stop();
@@ -297,16 +312,25 @@ String callMiMoAPI(const String& userInput) {
     if (line == "\r" || line.length() <= 1) break;
   }
 
-  // Buffer entire response body
+  // Buffer entire response body (with animation)
   String responseBody = "";
   responseBody.reserve(2048);
   timeout = millis() + 15000;
+  animTime = millis();
+  dotCount = 0;
   while (millis() < timeout) {
     while (secureClient.available()) {
       char c = secureClient.read();
       responseBody += c;
     }
     if (!secureClient.connected() && !secureClient.available()) break;
+    if (millis() - animTime > 400) {
+      animTime = millis();
+      dotCount = (dotCount + 1) % 4;
+      String dots = "Replying";
+      for (int d = 0; d < dotCount; d++) dots += ".";
+      updateDisplay(dots.c_str());
+    }
     delay(5);
   }
   secureClient.stop();
