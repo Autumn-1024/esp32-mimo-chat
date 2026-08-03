@@ -409,64 +409,34 @@ void trimHistory() {
 }
 
 // ============================================================
-//  Build Request Body
+//  Build Request Body (手拼JSON，不用ArduinoJson省内存)
 // ============================================================
 String buildRequestBody(const String& userInput) {
-  addToHistory("user", userInput);
-  
-  DynamicJsonDocument doc(8192);
-  
-  doc["model"] = MIMO_MODEL;
-  doc["max_completion_tokens"] = MAX_TOKENS;
-  doc["temperature"] = TEMPERATURE;
-  doc["top_p"] = TOP_P;
-  doc["stream"] = false;
-  
-  JsonObject thinking = doc.createNestedObject("thinking");
-  thinking["type"] = "disabled";
-  
-  JsonArray messages = doc.createNestedArray("messages");
-  for (int i = 0; i < historyCount; i++) {
-    JsonObject msg = messages.createNestedObject();
-    msg["role"] = history[i].role;
-    msg["content"] = history[i].content;
+  // 不做多轮对话，只发单条消息
+  String body = "{\"model\":\"";
+  body += MIMO_MODEL;
+  body += "\",\"max_completion_tokens\":";
+  body += MAX_TOKENS;
+  body += ",\"temperature\":1.0,\"stream\":false,\"thinking\":{\"type\":\"disabled\"},\"messages\":[{\"role\":\"system\",\"content\":\"";
+  // 简单转义引号
+  for (unsigned int i = 0; i < systemPrompt.length(); i++) {
+    if (systemPrompt[i] == '"') body += "\\\"";
+    else body += systemPrompt[i];
   }
-  
-  String body;
-  serializeJson(doc, body);
+  body += "\"},{\"role\":\"user\",\"content\":\"";
+  for (unsigned int i = 0; i < userInput.length(); i++) {
+    if (userInput[i] == '"') body += "\\\"";
+    else if (userInput[i] == '\\') body += "\\\\";
+    else if (userInput[i] == '\n') body += "\\n";
+    else if (userInput[i] == '\r') body += "\\r";
+    else body += userInput[i];
+  }
+  body += "\"}]}";
   return body;
 }
 
 // ============================================================
-//  Extract Content from JSON
-// ============================================================
-String extractContent(const String& json) {
-  DynamicJsonDocument doc(16384);
-  DeserializationError error = deserializeJson(doc, json);
-  
-  if (error) {
-    Serial.print("[ERR] JSON parse: ");
-    Serial.println(error.c_str());
-    return "";
-  }
-  
-  if (doc.containsKey("error")) {
-    String errorMsg = doc["error"]["message"].as<String>();
-    Serial.print("[ERR] API: ");
-    Serial.println(errorMsg);
-    return "Error: " + errorMsg;
-  }
-  
-  const char* content = doc["choices"][0]["message"]["content"];
-  if (content) {
-    return String(content);
-  }
-  
-  return "";
-}
-
-// ============================================================
-//  Call MiMo API
+//  Call MiMo API (流式读取，最小内存)
 // ============================================================
 String callMiMoAPI(const String& userInput) {
   if (!wifiConnected) {
@@ -485,45 +455,93 @@ String callMiMoAPI(const String& userInput) {
   client.setInsecure();
   client.setTimeout(30);
   
-  HTTPClient http;
-  http.begin(client, MIMO_API_URL);
-  http.addHeader("Content-Type", "application/json");
-  http.addHeader("Authorization", String("Bearer ") + MIMO_API_KEY);
-  http.setTimeout(30000);
-  
-  Serial.println("[REQ] Sending to MiMo API...");
-  
-  int httpCode = http.POST(requestBody);
-  
-  String response = "";
-  if (httpCode > 0) {
-    Serial.print("[REQ] HTTP: ");
-    Serial.println(httpCode);
-    
-    if (httpCode == HTTP_CODE_OK) {
-      response = http.getString();
-      String content = extractContent(response);
-      
-      unsigned long elapsed = millis() - startTime;
-      Serial.print("[REQ] Done in ");
-      Serial.print(elapsed);
-      Serial.println(" ms");
-      
-      http.end();
-      client.stop();
-      return content;
-    } else {
-      Serial.print("[ERR] HTTP: ");
-      Serial.println(http.errorToString(httpCode));
-      response = http.getString();
-      Serial.println(response);
-    }
-  } else {
-    Serial.print("[ERR] Request: ");
-    Serial.println(http.errorToString(httpCode));
+  if (!client.connect("api.xiaomimimo.com", 443)) {
+    Serial.println("[ERR] TCP connect failed");
+    client.stop();
+    return "";
   }
   
-  http.end();
+  // 手写HTTP请求
+  client.print("POST /v1/chat/completions HTTP/1.1\r\n");
+  client.print("Host: api.xiaomimimo.com\r\n");
+  client.print("Content-Type: application/json\r\n");
+  client.print("Authorization: Bearer ");
+  client.print(MIMO_API_KEY);
+  client.print("\r\n");
+  client.print("Content-Length: ");
+  client.print(requestBody.length());
+  client.print("\r\n\r\n");
+  client.print(requestBody);
+  
+  Serial.println("[REQ] Sent, waiting response...");
+  
+  // 等待响应
+  unsigned long timeout = millis() + 30000;
+  while (!client.available() && millis() < timeout) {
+    delay(10);
+  }
+  
+  if (!client.available()) {
+    Serial.println("[ERR] Response timeout");
+    client.stop();
+    return "";
+  }
+  
+  // 读取HTTP状态行
+  String statusLine = client.readStringUntil('\n');
+  statusLine.trim();
+  Serial.print("[REQ] ");
+  Serial.println(statusLine);
+  
+  // 跳过HTTP头
+  while (client.available()) {
+    String line = client.readStringUntil('\n');
+    if (line == "\r" || line.length() <= 1) break;
+  }
+  
+  // 读取响应体（限制大小）
+  String response = "";
+  response.reserve(2048);
+  timeout = millis() + 10000;
+  while (client.available() && millis() < timeout) {
+    char c = client.read();
+    if (response.length() < 2048) {
+      response += c;
+    }
+  }
+  
   client.stop();
-  return "";
+  
+  unsigned long elapsed = millis() - startTime;
+  Serial.print("[REQ] Done in ");
+  Serial.print(elapsed);
+  Serial.println(" ms");
+  
+  // 简单提取 "content":"..." 中的内容
+  int contentStart = response.indexOf("\"content\":\"");
+  if (contentStart < 0) {
+    Serial.println("[ERR] No content in response");
+    return "";
+  }
+  contentStart += 11; // skip "content":""
+  
+  String content = "";
+  content.reserve(512);
+  for (unsigned int i = contentStart; i < response.length(); i++) {
+    char c = response[i];
+    if (c == '"' && response[i-1] != '\\') break; // 找到结束引号
+    if (c == '\\' && i + 1 < response.length()) {
+      char next = response[i+1];
+      if (next == 'n') { content += '\n'; i++; }
+      else if (next == 'r') { content += '\r'; i++; }
+      else if (next == 't') { content += '\t'; i++; }
+      else if (next == '"') { content += '"'; i++; }
+      else if (next == '\\') { content += '\\'; i++; }
+      else { content += c; }
+    } else {
+      content += c;
+    }
+  }
+  
+  return content;
 }
