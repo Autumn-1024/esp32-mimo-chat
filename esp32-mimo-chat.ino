@@ -131,6 +131,28 @@ void startWiFi() {
   
   Serial.println("[OK] System ready. Type message:");
   Serial.println();
+  
+  // Debug: test TCP connection
+  Serial.println("[TEST] Testing TCP to api.xiaomimimo.com:443...");
+  WiFiClientSecure testClient;
+  testClient.setInsecure();
+  testClient.setTimeout(10);
+  if (testClient.connect("api.xiaomimimo.com", 443)) {
+    Serial.println("[TEST] TCP connected!");
+    testClient.stop();
+  } else {
+    Serial.println("[TEST] TCP connection FAILED!");
+  }
+  
+  // Debug: test DNS resolution
+  Serial.println("[TEST] Resolving api.xiaomimimo.com...");
+  IPAddress ip;
+  if (WiFi.hostByName("api.xiaomimimo.com", ip)) {
+    Serial.print("[TEST] Resolved to: ");
+    Serial.println(ip);
+  } else {
+    Serial.println("[TEST] DNS resolution FAILED!");
+  }
 }
 
 void checkWiFi() {
