@@ -22,7 +22,7 @@ WiFiClientSecure secureClient;  // Global to avoid heap corruption
 bool wifiConnected = false;
 String inputBuffer = "";
 unsigned long wifiCheckTime = 0;
-String systemPrompt = "You are MiMo, an AI assistant by Xiaomi. Answer concisely in the same language as the user.";
+String systemPrompt = "You are MiMo, an AI assistant by Xiaomi with hardware control. Answer concisely in the same language as the user.\n\nWhen the user wants to control a GPIO pin, respond ONLY with JSON (no other text):\n{\"gpio\":PIN,\"state\":VALUE}\nPIN=pin number, VALUE=1(HIGH) or 0(LOW).\nAvailable: GPIO 2 (built-in LED, active LOW: 1=OFF, 0=ON).\nExamples:\nUser: turn on LED -> {\"gpio\":2,\"state\":0}\nUser: 把D2设为高电平 -> {\"gpio\":2,\"state\":1}\nFor normal questions, reply with text as usual.";
 
 // ============ SETUP ============
 void setup() {
@@ -49,6 +49,11 @@ void setup() {
   pinMode(KEY3_PIN, INPUT_PULLUP);
   pinMode(KEY4_PIN, INPUT_PULLUP);
   Serial.println("[OK] Keys ready");
+
+  // GPIO2 (built-in LED)
+  pinMode(2, OUTPUT);
+  digitalWrite(2, HIGH);  // LED off (active LOW)
+  Serial.println("[OK] GPIO2 ready");
 
   // WiFi
   Serial.print("[WIFI] Connecting to ");
@@ -108,8 +113,12 @@ void loop() {
             Serial.println("[...] Thinking...");
             String reply = callMiMoAPI(inputBuffer);
             if (reply.length() > 0) {
-              Serial.print("\n[MIMO] ");
-              Serial.println(reply);
+              if (tryHandleGPIO(reply)) {
+                Serial.println("[GPIO] Done");
+              } else {
+                Serial.print("\n[MIMO] ");
+                Serial.println(reply);
+              }
               Serial.println();
             } else {
               Serial.println("[ERR] No response");
@@ -170,6 +179,29 @@ String buildRequestBody(const String& userInput) {
   }
   body += "\"}],\"tools\":[{\"type\":\"web_search\",\"max_keyword\":3,\"force_search\":true,\"limit\":1}],\"tool_choice\":\"auto\"}";
   return body;
+}
+
+// ============ GPIO Control ============
+bool tryHandleGPIO(const String& reply) {
+  String r = reply;
+  r.trim();
+  if (!r.startsWith("{")) return false;
+  int gpioIdx = r.indexOf("\"gpio\":");
+  int stateIdx = r.indexOf("\"state\":");
+  if (gpioIdx < 0 || stateIdx < 0) return false;
+  int pin = r.substring(gpioIdx + 7).toInt();
+  int val = r.substring(stateIdx + 8).toInt();
+  if (pin != 2) {
+    Serial.print("[GPIO] Invalid pin: ");
+    Serial.println(pin);
+    return true;
+  }
+  digitalWrite(pin, val ? HIGH : LOW);
+  Serial.print("[GPIO] D");
+  Serial.print(pin);
+  Serial.print(" -> ");
+  Serial.println(val ? "HIGH" : "LOW");
+  return true;
 }
 
 // ============ Call MiMo API ============
