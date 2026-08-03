@@ -168,7 +168,7 @@ String buildRequestBody(const String& userInput) {
     else if (userInput[i] == '\r') body += "\\r";
     else body += userInput[i];
   }
-  body += "\"}],\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"web_search\",\"description\":\"Search the web for current information\",\"parameters\":{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"}},\"required\":[\"query\"]}}}]";
+  body += "\"}],\"tools\":[{\"type\":\"web_search\",\"max_keyword\":3,\"force_search\":true,\"limit\":1}],\"tool_choice\":\"auto\"";
   return body;
 }
 
