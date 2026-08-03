@@ -16,6 +16,7 @@
 // Disable brownout detector (WiFi RF draws 240-500mA, USB may not supply enough)
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
+#include "esp_task_wdt.h"
 
 // ============ Global Objects ============
 Adafruit_SSD1306 display(OLED_WIDTH, OLED_HEIGHT, &Wire, -1);
@@ -60,6 +61,11 @@ void handleKeys();
 void setup() {
   // Disable brownout detector FIRST to prevent WiFi reboot
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+  
+  // Disable task watchdog (WiFi connection can block and trigger WDT reset)
+  esp_task_wdt_delete(xTaskGetIdleTaskHandleForCPU(0));
+  disableCore0WDT();
+  disableCore1WDT();
   
   Serial.begin(SERIAL_BAUD);
   delay(500);
