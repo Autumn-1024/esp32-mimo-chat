@@ -136,7 +136,8 @@ void checkWiFi() {
   if (millis() - wifiCheckTime < 5000) return;
   wifiCheckTime = millis();
   
-  bool connected = WiFi.isConnected();
+  // Use IP address to check connection (WiFi.status/isConnected buggy)
+  bool connected = (WiFi.localIP().toString() != "0.0.0.0");
   
   if (connected && !wifiConnected) {
     wifiConnected = true;
