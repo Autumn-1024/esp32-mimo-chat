@@ -97,45 +97,31 @@ void loop() {
 //  WiFi - Non-blocking
 // ============================================================
 void startWiFi() {
-  Serial.print("[WIFI] Starting: ");
+  Serial.print("[WIFI] Connecting to ");
   Serial.println(WIFI_SSID);
   
-  WiFi.disconnect(true);  // Clean start
-  delay(100);
-  WiFi.mode(WIFI_STA);
-  WiFi.setTxPower(WIFI_POWER_5dBm);
-  WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   
-  Serial.println("[WIFI] Waiting for connection...");
-  
-  // waitForConnectResult blocks until connected or timeout (30s)
-  int result = WiFi.waitForConnectResult(30000);
-  
-  Serial.print("[WIFI] Result: ");
-  Serial.println(result);
-  
-  if (result == WL_CONNECTED) {
-    wifiConnected = true;
-    Serial.println("[WIFI] Connected!");
-    Serial.print("[WIFI] IP: ");
-    Serial.println(WiFi.localIP());
-    
-    oledClear();
-    oledShowLine(0, "WiFi Connected!");
-    oledShowLine(1, "IP: " + WiFi.localIP().toString());
-    oledShowLine(3, "MiMo Chat Ready!");
-    oledShowLine(5, "Waiting input...");
-    
-    Serial.println("[OK] System ready. Type message:");
-    Serial.println();
-  } else {
-    wifiConnected = false;
-    Serial.println("[WIFI] Connection failed!");
-    Serial.print("[WIFI] Result code: ");
-    Serial.println(result);
-    oledShowStatus("WiFi Failed! " + String(result));
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(500);
+    Serial.print(".");
   }
+  
+  Serial.println();
+  wifiConnected = true;
+  Serial.println("[WIFI] Connected!");
+  Serial.print("[WIFI] IP: ");
+  Serial.println(WiFi.localIP());
+  
+  oledClear();
+  oledShowLine(0, "WiFi Connected!");
+  oledShowLine(1, "IP: " + WiFi.localIP().toString());
+  oledShowLine(3, "MiMo Chat Ready!");
+  oledShowLine(5, "Waiting input...");
+  
+  Serial.println("[OK] System ready. Type message:");
+  Serial.println();
 }
 
 void checkWiFi() {
