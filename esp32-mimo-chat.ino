@@ -217,18 +217,32 @@ String callMiMoAPI(const String& userInput) {
     if (line == "\r" || line.length() <= 1) break;
   }
 
-  // Parse content inline
+  // Buffer entire response body
+  String responseBody = "";
+  responseBody.reserve(2048);
+  timeout = millis() + 15000;
+  while (millis() < timeout) {
+    while (secureClient.available()) {
+      char c = secureClient.read();
+      responseBody += c;
+    }
+    if (!secureClient.connected() && !secureClient.available()) break;
+    delay(5);
+  }
+  secureClient.stop();
+  Serial.print("[BUF] ");
+  Serial.print(responseBody.length());
+  Serial.println(" bytes");
+
+  // Find "content":" in buffered response
   String result = "";
-  bool inContent = false, escaped = false;
-  char search[] = "\"content\":\"";
-  int searchIdx = 0;
-  timeout = millis() + 10000;
-  while (secureClient.available() && millis() < timeout) {
-    char c = secureClient.read();
-    if (!inContent) {
-      if (c == search[searchIdx]) { searchIdx++; if (searchIdx >= 11) inContent = true; }
-      else searchIdx = (c == search[0]) ? 1 : 0;
-    } else {
+  const char* marker = "\"content\":\"";
+  int idx = responseBody.indexOf(marker);
+  if (idx >= 0) {
+    int start = idx + 11; // length of "content":"
+    bool escaped = false;
+    for (int i = start; i < (int)responseBody.length(); i++) {
+      char c = responseBody[i];
       if (escaped) {
         if (c == 'n') result += '\n';
         else if (c == 'r') result += '\r';
@@ -245,10 +259,6 @@ String callMiMoAPI(const String& userInput) {
       }
     }
   }
-
-  secureClient.stop();
-  delay(100);
-  yield();
 
   Serial.print("[REQ] Done in ");
   Serial.print(millis() - startTime);
