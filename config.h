@@ -3,7 +3,7 @@
 
 // ============ WiFi 配置 ============
 #define WIFI_SSID     "Xiaomi15 By Autumn"
-#define WIFI_PASSWORD "你的WiFi密码"  // TODO: 填入实际密码
+#define WIFI_PASSWORD "........"
 
 // ============ MiMo API 配置 ============
 #define MIMO_API_URL  "https://api.xiaomimimo.com/v1/chat/completions"
