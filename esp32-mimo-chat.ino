@@ -78,7 +78,7 @@ void updateDisplay(const char* statusOverride = NULL) {
 
   display.display();
 }
-String systemPrompt = "You are MiMo, an AI assistant by Xiaomi with hardware control. Answer concisely in the same language as the user.\n\nWhen the user wants to control a GPIO pin, respond ONLY with JSON (no other text):\n{\"gpio\":PIN,\"state\":VALUE}\nPIN=pin number, VALUE=1(HIGH) or 0(LOW).\nAvailable: GPIO 2 (built-in LED, active LOW: 1=ON, 0=OFF).\nExamples:\nUser: turn on LED -> {\"gpio\":2,\"state\":1}\nUser: 把D2设为高电平 -> {\"gpio\":2,\"state\":0}\nFor normal questions, reply with text as usual.";
+String systemPrompt = "You are MiMo, an AI assistant by Xiaomi with hardware control. Answer concisely in the same language as the user.\n\nWhen the user wants to control a GPIO pin, respond ONLY with JSON (no other text):\n{\"gpio\":PIN,\"state\":VALUE}\nPIN=pin number, VALUE=1(HIGH) or 0(LOW).\nAvailable: GPIO 2 (built-in LED, active LOW: 1=ON, 0=OFF).\nExamples:\nUser: turn on LED -> {\"gpio\":2,\"state\":1}\nUser: turn off LED -> {\"gpio\":2,\"state\":0}\nFor normal questions, reply with text as usual.";
 
 // ============ SETUP ============
 void setup() {
@@ -248,7 +248,7 @@ bool tryHandleGPIO(const String& reply) {
     Serial.println(pin);
     return true;
   }
-  digitalWrite(pin, val ? LOW : HIGH);  // active LOW: 1=ON, 0=OFF
+  digitalWrite(pin, val ? HIGH : LOW);  // 1=ON, 0=OFF
   Serial.print("[GPIO] D");
   Serial.print(pin);
   Serial.print(" -> ");
