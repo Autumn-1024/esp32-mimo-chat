@@ -31,6 +31,6 @@
 #define TOP_P         0.95
 
 // ============ 对话历史 ============
-#define MAX_HISTORY   4  // 保留最近N轮对话
+#define MAX_HISTORY   2  // 保留最近N轮对话
 
 #endif // CONFIG_H
