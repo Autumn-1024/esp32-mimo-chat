@@ -22,6 +22,58 @@ WiFiClientSecure secureClient;  // Global to avoid heap corruption
 bool wifiConnected = false;
 String inputBuffer = "";
 unsigned long wifiCheckTime = 0;
+
+// Display states
+#define DISP_READY    0
+#define DISP_THINKING 1
+#define DISP_REPLYING 2
+#define DISP_GPIO_OK  3
+#define DISP_ERROR    4
+int displayState = DISP_READY;
+
+// ============ OLED Display ============
+void updateDisplay() {
+  display.clearDisplay();
+
+  // Line 1: Title (large, centered)
+  display.setTextSize(2);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(4, 0);
+  display.println("ESP32 MiMo");
+
+  // Line 2: WiFi status (small)
+  display.setTextSize(1);
+  display.setCursor(0, 18);
+  display.print("WiFi: ");
+  display.println(wifiConnected ? "Connected" : "Offline");
+
+  // Line 3: IP address (small)
+  display.setCursor(0, 28);
+  display.print("IP: ");
+  display.println(WiFi.localIP().toString());
+
+  // Separator line
+  display.drawLine(0, 38, 127, 38, SSD1306_WHITE);
+
+  // Status area
+  display.setTextSize(1);
+  const char* statusText = "";
+  switch (displayState) {
+    case DISP_READY:    statusText = ">> Ready <<"; break;
+    case DISP_THINKING: statusText = "Thinking..."; break;
+    case DISP_REPLYING: statusText = "Replying..."; break;
+    case DISP_GPIO_OK:  statusText = "GPIO OK"; break;
+    case DISP_ERROR:    statusText = "Error!"; break;
+  }
+  // Center status text
+  int16_t x1, y1;
+  uint16_t w, h;
+  display.getTextBounds(statusText, 0, 0, &x1, &y1, &w, &h);
+  display.setCursor((128 - w) / 2, 50);
+  display.println(statusText);
+
+  display.display();
+}
 String systemPrompt = "You are MiMo, an AI assistant by Xiaomi with hardware control. Answer concisely in the same language as the user.\n\nWhen the user wants to control a GPIO pin, respond ONLY with JSON (no other text):\n{\"gpio\":PIN,\"state\":VALUE}\nPIN=pin number, VALUE=1(HIGH) or 0(LOW).\nAvailable: GPIO 2 (built-in LED, active LOW: 1=OFF, 0=ON).\nExamples:\nUser: turn on LED -> {\"gpio\":2,\"state\":0}\nUser: 把D2设为高电平 -> {\"gpio\":2,\"state\":1}\nFor normal questions, reply with text as usual.";
 
 // ============ SETUP ============
@@ -34,13 +86,6 @@ void setup() {
   // OLED
   Wire.begin(OLED_SDA, OLED_SCL);
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0, 0);
-  display.println("ESP32 MiMo Chat");
-  display.println("Connecting...");
-  display.display();
   Serial.println("[OK] OLED ready");
 
   // Keys
@@ -65,6 +110,7 @@ void setup() {
   IPAddress dns2(114, 114, 114, 114);
   WiFi.config(local_IP, gateway, subnet, dns1, dns2);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  updateDisplay();  // Show "WiFi: Offline" while connecting
   while (WiFi.localIP().toString() == "0.0.0.0") {
     delay(500);
     Serial.print(".");
@@ -74,14 +120,8 @@ void setup() {
   Serial.print("[WIFI] Connected! IP: ");
   Serial.println(WiFi.localIP());
 
-  display.clearDisplay();
-  display.setCursor(0, 0);
-  display.println("WiFi Connected!");
-  display.println("IP: " + WiFi.localIP().toString());
-  display.println();
-  display.println("MiMo Chat Ready!");
-  display.println("Type message...");
-  display.display();
+  displayState = DISP_READY;
+  updateDisplay();
   Serial.println("[OK] Ready. Type message:\n");
 }
 
@@ -94,6 +134,7 @@ void loop() {
     if (!connected && wifiConnected) {
       wifiConnected = false;
       Serial.println("[WIFI] Lost!");
+      updateDisplay();
     }
   }
 
@@ -111,17 +152,24 @@ void loop() {
             Serial.println("[ERR] WiFi not connected");
           } else {
             Serial.println("[...] Thinking...");
+            displayState = DISP_THINKING;
+            updateDisplay();
             String reply = callMiMoAPI(inputBuffer);
             if (reply.length() > 0) {
               if (tryHandleGPIO(reply)) {
                 Serial.println("[GPIO] Done");
+                displayState = DISP_GPIO_OK;
               } else {
                 Serial.print("\n[MIMO] ");
                 Serial.println(reply);
+                displayState = DISP_READY;
               }
+              updateDisplay();
               Serial.println();
             } else {
               Serial.println("[ERR] No response");
+              displayState = DISP_ERROR;
+              updateDisplay();
             }
           }
           Serial.print("[YOU] ");
