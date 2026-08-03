@@ -436,7 +436,7 @@ String buildRequestBody(const String& userInput) {
 }
 
 // ============================================================
-//  Call MiMo API (流式读取，最小内存)
+//  Call MiMo API (边读边输出，最小内存)
 // ============================================================
 String callMiMoAPI(const String& userInput) {
   if (!wifiConnected) {
@@ -472,6 +472,7 @@ String callMiMoAPI(const String& userInput) {
   client.print(requestBody.length());
   client.print("\r\n\r\n");
   client.print(requestBody);
+  requestBody = ""; // 释放内存
   
   Serial.println("[REQ] Sent, waiting response...");
   
@@ -499,14 +500,46 @@ String callMiMoAPI(const String& userInput) {
     if (line == "\r" || line.length() <= 1) break;
   }
   
-  // 读取响应体（限制大小）
-  String response = "";
-  response.reserve(2048);
+  // 边读边解析：找 "content":" 然后直接输出到串口
+  String result = "";
+  result.reserve(256);
+  bool inContent = false;
+  bool escaped = false;
+  char search[] = "\"content\":\"";
+  int searchIdx = 0;
+  int searchLen = 11;
+  
   timeout = millis() + 10000;
   while (client.available() && millis() < timeout) {
     char c = client.read();
-    if (response.length() < 2048) {
-      response += c;
+    
+    if (!inContent) {
+      // 搜索 "content":" 模式
+      if (c == search[searchIdx]) {
+        searchIdx++;
+        if (searchIdx >= searchLen) {
+          inContent = true;
+        }
+      } else {
+        searchIdx = (c == search[0]) ? 1 : 0;
+      }
+    } else {
+      // 在content内容中
+      if (escaped) {
+        if (c == 'n') result += '\n';
+        else if (c == 'r') result += '\r';
+        else if (c == 't') result += '\t';
+        else if (c == '"') result += '"';
+        else if (c == '\\') result += '\\';
+        else result += c;
+        escaped = false;
+      } else if (c == '\\') {
+        escaped = true;
+      } else if (c == '"') {
+        break; // 结束
+      } else {
+        result += c;
+      }
     }
   }
   
@@ -517,31 +550,5 @@ String callMiMoAPI(const String& userInput) {
   Serial.print(elapsed);
   Serial.println(" ms");
   
-  // 简单提取 "content":"..." 中的内容
-  int contentStart = response.indexOf("\"content\":\"");
-  if (contentStart < 0) {
-    Serial.println("[ERR] No content in response");
-    return "";
-  }
-  contentStart += 11; // skip "content":""
-  
-  String content = "";
-  content.reserve(512);
-  for (unsigned int i = contentStart; i < response.length(); i++) {
-    char c = response[i];
-    if (c == '"' && response[i-1] != '\\') break; // 找到结束引号
-    if (c == '\\' && i + 1 < response.length()) {
-      char next = response[i+1];
-      if (next == 'n') { content += '\n'; i++; }
-      else if (next == 'r') { content += '\r'; i++; }
-      else if (next == 't') { content += '\t'; i++; }
-      else if (next == '"') { content += '"'; i++; }
-      else if (next == '\\') { content += '\\'; i++; }
-      else { content += c; }
-    } else {
-      content += c;
-    }
-  }
-  
-  return content;
+  return result;
 }
