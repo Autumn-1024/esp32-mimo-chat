@@ -1,8 +1,7 @@
 /*
- * ESP32 MiMo Chat - 串口聊天机器人
- * 功能：通过串口与小米MiMo大模型对话
- * 硬件：ESP32 Dev Module + 0.96寸OLED + 4按键
- * 作者：Autumn
+ * ESP32 MiMo Chat - Serial Chat Bot
+ * Hardware: ESP32 Dev Module + 0.96" OLED + 4 Buttons
+ * Author: Autumn
  */
 
 #include <WiFi.h>
@@ -14,25 +13,25 @@
 #include <Adafruit_SSD1306.h>
 #include "config.h"
 
-// ============ 全局对象 ============
+// ============ Global Objects ============
 Adafruit_SSD1306 display(OLED_WIDTH, OLED_HEIGHT, &Wire, -1);
 
-// ============ 对话历史 ============
+// ============ Chat History ============
 struct Message {
   String role;
   String content;
 };
 
-Message history[MAX_HISTORY * 2 + 1]; // system + N轮(user+assistant)
+Message history[MAX_HISTORY * 2 + 1];
 int historyCount = 0;
-String systemPrompt = "你是MiMo，小米AI助手。请用简洁的中文回答问题。";
+String systemPrompt = "You are MiMo, an AI assistant by Xiaomi. Answer concisely in the same language as the user.";
 
-// ============ 状态变量 ============
+// ============ State Variables ============
 bool wifiConnected = false;
 bool waitingResponse = false;
 String inputBuffer = "";
 
-// ============ 函数声明 ============
+// ============ Function Declarations ============
 void setupWiFi();
 void setupOLED();
 void setupKeys();
@@ -55,32 +54,33 @@ void setup() {
   Serial.begin(SERIAL_BAUD);
   delay(100);
   
-  Serial.println("\n================================");
+  Serial.println();
+  Serial.println("================================");
   Serial.println("  ESP32 MiMo Chat v1.0");
-  Serial.println("  串口聊天机器人");
-  Serial.println("================================\n");
+  Serial.println("  Serial Chat Bot");
+  Serial.println("================================");
+  Serial.println();
 
-  // 初始化硬件
   setupOLED();
   setupKeys();
   
-  oledShowStatus("正在连接WiFi...");
+  oledShowStatus("Connecting WiFi...");
   setupWiFi();
   
   if (wifiConnected) {
-    oledShowStatus("WiFi已连接");
+    oledShowStatus("WiFi Connected");
     delay(500);
     oledClear();
     oledShowLine(0, "MiMo Chat Ready!");
-    oledShowLine(2, "等待输入...");
+    oledShowLine(2, "Waiting input...");
     
-    Serial.println("✅ 系统就绪，请输入消息（回车发送）：\n");
+    Serial.println("[OK] System ready. Type message and press Enter:");
+    Serial.println();
   } else {
-    oledShowStatus("WiFi连接失败!");
-    Serial.println("❌ WiFi连接失败，请检查配置");
+    oledShowStatus("WiFi Failed!");
+    Serial.println("[ERR] WiFi connect failed");
   }
   
-  // 初始化对话历史
   historyCount = 0;
   addToHistory("system", systemPrompt);
 }
@@ -94,44 +94,42 @@ void loop() {
 }
 
 // ============================================================
-//  WiFi 初始化
+//  WiFi Setup
 // ============================================================
 void setupWiFi() {
-  Serial.print("📡 连接WiFi: ");
+  Serial.print("[WIFI] Connecting: ");
   Serial.println(WIFI_SSID);
   
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   
   int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
-    delay(500);
+  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+    delay(1000);
     Serial.print(".");
     attempts++;
   }
+  Serial.println();
   
   if (WiFi.status() == WL_CONNECTED) {
     wifiConnected = true;
-    Serial.println("\n✅ WiFi已连接");
-    Serial.print("   IP: ");
+    Serial.println("[WIFI] Connected");
+    Serial.print("[WIFI] IP: ");
     Serial.println(WiFi.localIP());
-    Serial.print("   信号: ");
-    Serial.print(WiFi.RSSI());
-    Serial.println(" dBm");
   } else {
     wifiConnected = false;
-    Serial.println("\n❌ WiFi连接超时");
+    Serial.println("[WIFI] Failed");
   }
 }
 
 // ============================================================
-//  OLED 初始化
+//  OLED Setup
 // ============================================================
 void setupOLED() {
   Wire.begin(OLED_SDA, OLED_SCL);
   
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-    Serial.println("❌ OLED初始化失败");
+    Serial.println("[ERR] OLED init failed");
     return;
   }
   
@@ -143,11 +141,11 @@ void setupOLED() {
   display.println("Initializing...");
   display.display();
   
-  Serial.println("✅ OLED就绪 (SDA:" + String(OLED_SDA) + " SCL:" + String(OLED_SCL) + ")");
+  Serial.println("[OK] OLED ready");
 }
 
 // ============================================================
-//  按键初始化
+//  Key Setup
 // ============================================================
 void setupKeys() {
   pinMode(KEY1_PIN, INPUT_PULLUP);
@@ -155,12 +153,11 @@ void setupKeys() {
   pinMode(KEY3_PIN, INPUT_PULLUP);
   pinMode(KEY4_PIN, INPUT_PULLUP);
   
-  Serial.println("✅ 按键就绪 (GPIO: " + String(KEY1_PIN) + "," + 
-                 String(KEY2_PIN) + "," + String(KEY3_PIN) + "," + String(KEY4_PIN) + ")");
+  Serial.println("[OK] Keys ready");
 }
 
 // ============================================================
-//  OLED 显示函数
+//  OLED Display Functions
 // ============================================================
 void oledClear() {
   display.clearDisplay();
@@ -169,10 +166,8 @@ void oledClear() {
 }
 
 void oledShowLine(int line, const String& text) {
-  if (line < 0 || line > 7) return; // 128x64, 8行
+  if (line < 0 || line > 7) return;
   display.setTextSize(1);
-  
-  // 清除该行区域
   display.fillRect(0, line * 8, OLED_WIDTH, 8, SSD1306_BLACK);
   display.setCursor(0, line * 8);
   display.println(text);
@@ -194,27 +189,23 @@ void oledShowChat(const String& role, const String& text) {
   display.setCursor(0, 0);
   display.setTextSize(1);
   
-  // 第一行显示角色
   if (role == "user") {
     display.println("> You:");
   } else {
     display.println("> MiMo:");
   }
   
-  // 统计字符数和token估算
   display.println("Msg: " + String(text.length()) + " chars");
-  
-  // 显示等待状态（中文内容在串口查看）
-  display.println("");
-  display.println("See Serial Monitor");
+  display.println();
+  display.println("Check Serial Monitor");
   display.println("for full content.");
-  display.println("");
+  display.println();
   display.println("Baud: 115200");
   display.display();
 }
 
 // ============================================================
-//  串口输入处理
+//  Serial Input Handler
 // ============================================================
 void handleSerialInput() {
   while (Serial.available()) {
@@ -225,82 +216,86 @@ void handleSerialInput() {
         inputBuffer.trim();
         
         if (inputBuffer.length() > 0) {
-          Serial.println("\n👤 You: " + inputBuffer);
+          Serial.println();
+          Serial.print("[YOU] ");
+          Serial.println(inputBuffer);
           oledShowChat("user", inputBuffer);
           
-          // 调用API
           waitingResponse = true;
-          Serial.println("⏳ MiMo正在思考...\n");
-          oledShowStatus("MiMo思考中...");
+          Serial.println("[...] Thinking...");
+          oledShowStatus("Thinking...");
           
           String reply = callMiMoAPI(inputBuffer);
           
           if (reply.length() > 0) {
-            Serial.println("🤖 MiMo: " + reply + "\n");
+            Serial.println();
+            Serial.print("[MIMO] ");
+            Serial.println(reply);
+            Serial.println();
             oledShowChat("assistant", reply);
             addToHistory("assistant", reply);
           } else {
-            Serial.println("❌ 获取回复失败\n");
-            oledShowStatus("请求失败!");
+            Serial.println("[ERR] No response");
+            oledShowStatus("Request failed!");
           }
           
           waitingResponse = false;
-          Serial.println("请输入消息（回车发送）：");
+          Serial.print("[YOU] ");
         }
         
         inputBuffer = "";
       }
-    } else if (c == '\b' || c == 127) { // 退格
+    } else if (c == '\b' || c == 127) {
       if (inputBuffer.length() > 0) {
         inputBuffer.remove(inputBuffer.length() - 1);
         Serial.print("\b \b");
       }
     } else {
       inputBuffer += c;
-      Serial.print(c); // 回显
+      Serial.print(c);
     }
   }
 }
 
 // ============================================================
-//  按键处理
+//  Key Handler
 // ============================================================
 void handleKeys() {
   static unsigned long lastKeyTime = 0;
   static bool lastKey1 = HIGH, lastKey2 = HIGH, lastKey3 = HIGH, lastKey4 = HIGH;
   
-  if (millis() - lastKeyTime < 50) return; // 消抖
+  if (millis() - lastKeyTime < 50) return;
   
   bool k1 = digitalRead(KEY1_PIN);
   bool k2 = digitalRead(KEY2_PIN);
   bool k3 = digitalRead(KEY3_PIN);
   bool k4 = digitalRead(KEY4_PIN);
   
-  // 按键1 - 发送预设消息
   if (k1 == LOW && lastKey1 == HIGH) {
     lastKeyTime = millis();
-    Serial.println("\n🔘 KEY1: 发送 '你好'");
-    inputBuffer = "你好";
+    Serial.println("[KEY1] Send 'Hello'");
+    inputBuffer = "Hello";
     Serial.println(inputBuffer);
   }
   
-  // 按键2 - 清除历史
   if (k2 == LOW && lastKey2 == HIGH) {
     lastKeyTime = millis();
-    historyCount = 1; // 只保留system prompt
-    Serial.println("\n🔘 KEY2: 对话历史已清除");
-    oledShowStatus("历史已清除");
+    historyCount = 1;
+    Serial.println("[KEY2] History cleared");
+    oledShowStatus("History cleared");
     delay(500);
-    oledShowLine(2, "等待输入...");
+    oledShowLine(2, "Waiting input...");
   }
   
-  // 按键3 - 显示状态
   if (k3 == LOW && lastKey3 == HIGH) {
     lastKeyTime = millis();
-    Serial.println("\n🔘 KEY3: 显示状态");
-    Serial.println("  WiFi: " + String(wifiConnected ? "已连接" : "断开"));
-    Serial.println("  历史: " + String(historyCount) + " 条");
-    Serial.println("  内存: " + String(ESP.getFreeHeap()) + " bytes");
+    Serial.println("[KEY3] Status:");
+    Serial.print("  WiFi: ");
+    Serial.println(wifiConnected ? "OK" : "FAIL");
+    Serial.print("  History: ");
+    Serial.println(historyCount);
+    Serial.print("  Heap: ");
+    Serial.println(ESP.getFreeHeap());
     
     oledClear();
     oledShowLine(0, "Status:");
@@ -308,22 +303,21 @@ void handleKeys() {
     oledShowLine(2, "History: " + String(historyCount));
     oledShowLine(3, "Heap: " + String(ESP.getFreeHeap()));
     delay(2000);
-    oledShowLine(2, "等待输入...");
+    oledShowLine(2, "Waiting input...");
   }
   
-  // 按键4 - 重新连接WiFi
   if (k4 == LOW && lastKey4 == HIGH) {
     lastKeyTime = millis();
-    Serial.println("\n🔘 KEY4: 重连WiFi");
-    oledShowStatus("重连WiFi...");
+    Serial.println("[KEY4] Reconnect WiFi");
+    oledShowStatus("Reconnecting...");
     setupWiFi();
     if (wifiConnected) {
-      oledShowStatus("WiFi已连接");
+      oledShowStatus("WiFi Connected");
     } else {
-      oledShowStatus("WiFi连接失败!");
+      oledShowStatus("WiFi Failed!");
     }
     delay(1000);
-    oledShowLine(2, "等待输入...");
+    oledShowLine(2, "Waiting input...");
   }
   
   lastKey1 = k1;
@@ -333,7 +327,7 @@ void handleKeys() {
 }
 
 // ============================================================
-//  对话历史管理
+//  Chat History Management
 // ============================================================
 void addToHistory(const String& role, const String& content) {
   if (historyCount >= MAX_HISTORY * 2 + 1) {
@@ -345,11 +339,9 @@ void addToHistory(const String& role, const String& content) {
 }
 
 void trimHistory() {
-  // 保留 system prompt (index 0) + 最近的对话
   int keepFrom = historyCount - (MAX_HISTORY * 2);
   if (keepFrom < 1) keepFrom = 1;
   
-  // 移动保留的消息
   int newIndex = 1;
   for (int i = keepFrom; i < historyCount; i++) {
     history[newIndex] = history[i];
@@ -359,15 +351,11 @@ void trimHistory() {
 }
 
 // ============================================================
-//  构建请求体
+//  Build Request Body
 // ============================================================
 String buildRequestBody(const String& userInput) {
-  // 添加用户消息到历史
   addToHistory("user", userInput);
   
-  // 构建JSON
-  // 使用 StaticJsonDocument 节省内存
-  // 如果内存不够，可以降低 MAX_HISTORY
   DynamicJsonDocument doc(8192);
   
   doc["model"] = MIMO_MODEL;
@@ -392,25 +380,25 @@ String buildRequestBody(const String& userInput) {
 }
 
 // ============================================================
-//  从JSON提取content
+//  Extract Content from JSON
 // ============================================================
 String extractContent(const String& json) {
   DynamicJsonDocument doc(16384);
   DeserializationError error = deserializeJson(doc, json);
   
   if (error) {
-    Serial.println("❌ JSON解析失败: " + String(error.c_str()));
+    Serial.print("[ERR] JSON parse: ");
+    Serial.println(error.c_str());
     return "";
   }
   
-  // 检查是否有错误
   if (doc.containsKey("error")) {
     String errorMsg = doc["error"]["message"].as<String>();
-    Serial.println("❌ API错误: " + errorMsg);
-    return "错误: " + errorMsg;
+    Serial.print("[ERR] API: ");
+    Serial.println(errorMsg);
+    return "Error: " + errorMsg;
   }
   
-  // 提取 content
   const char* content = doc["choices"][0]["message"]["content"];
   if (content) {
     return String(content);
@@ -420,62 +408,62 @@ String extractContent(const String& json) {
 }
 
 // ============================================================
-//  调用 MiMo API
+//  Call MiMo API
 // ============================================================
 String callMiMoAPI(const String& userInput) {
-  if (!wifiConnected) {
-    Serial.println("❌ WiFi未连接");
-    return "";
-  }
-  
-  if (WiFi.status() != WL_CONNECTED) {
+  if (!wifiConnected || WiFi.status() != WL_CONNECTED) {
+    Serial.println("[ERR] WiFi not connected");
     wifiConnected = false;
-    Serial.println("❌ WiFi已断开");
     return "";
   }
   
   unsigned long startTime = millis();
   
   String requestBody = buildRequestBody(userInput);
-  
-  // 调试：打印请求大小
-  Serial.println("📦 请求体大小: " + String(requestBody.length()) + " bytes");
+  Serial.print("[REQ] Size: ");
+  Serial.print(requestBody.length());
+  Serial.println(" bytes");
   
   WiFiClientSecure client;
-  client.setInsecure(); // 跳过证书验证（开发阶段）
-  client.setTimeout(30); // 30秒超时
+  client.setInsecure();
+  client.setTimeout(30);
   
   HTTPClient http;
   http.begin(client, MIMO_API_URL);
   http.addHeader("Content-Type", "application/json");
-  http.addHeader("Authorization", "Bearer " + String(MIMO_API_KEY));
-  http.setTimeout(30000); // 30秒超时
+  http.addHeader("Authorization", String("Bearer ") + MIMO_API_KEY);
+  http.setTimeout(30000);
   
-  Serial.println("📡 发送请求到 MiMo API...");
+  Serial.println("[REQ] Sending to MiMo API...");
   
   int httpCode = http.POST(requestBody);
   
   String response = "";
   if (httpCode > 0) {
-    Serial.println("📨 HTTP状态码: " + String(httpCode));
+    Serial.print("[REQ] HTTP: ");
+    Serial.println(httpCode);
     
     if (httpCode == HTTP_CODE_OK) {
       response = http.getString();
       String content = extractContent(response);
       
       unsigned long elapsed = millis() - startTime;
-      Serial.println("⏱️ 耗时: " + String(elapsed) + "ms");
+      Serial.print("[REQ] Done in ");
+      Serial.print(elapsed);
+      Serial.println(" ms");
       
       http.end();
       client.stop();
       return content;
     } else {
-      Serial.println("❌ HTTP错误: " + http.errorToString(httpCode));
+      Serial.print("[ERR] HTTP: ");
+      Serial.println(http.errorToString(httpCode));
       response = http.getString();
-      Serial.println("   响应: " + response);
+      Serial.println(response);
     }
   } else {
-    Serial.println("❌ 请求失败: " + http.errorToString(httpCode));
+    Serial.print("[ERR] Request: ");
+    Serial.println(http.errorToString(httpCode));
   }
   
   http.end();
