@@ -2,7 +2,7 @@
 #define CONFIG_H
 
 // ============ WiFi 配置 ============
-#define WIFI_SSID     "Book14 By Autumn"
+#define WIFI_SSID     "Xiaomi15 By Autumn"
 #define WIFI_PASSWORD "........"
 
 // ============ MiMo API 配置 ============
