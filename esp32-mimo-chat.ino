@@ -113,52 +113,37 @@ void checkWiFi() {
   if (millis() - wifiCheckTime < 1000) return;
   wifiCheckTime = millis();
   
+  // Use multiple methods to check connection
+  bool actuallyConnected = WiFi.isConnected();
   int currentStatus = WiFi.status();
   
-  if (currentStatus != wifiStatus) {
-    wifiStatus = currentStatus;
+  // Always print while not connected
+  if (!actuallyConnected) {
+    Serial.print("[WIFI] status=");
+    Serial.print(currentStatus);
+    Serial.print(" connected=");
+    Serial.println(actuallyConnected);
+  }
+  
+  if (actuallyConnected && !wifiConnected) {
+    // WiFi just connected!
+    wifiConnected = true;
+    Serial.println("[WIFI] Connected!");
+    Serial.print("[WIFI] IP: ");
+    Serial.println(WiFi.localIP());
     
-    switch (wifiStatus) {
-      case WL_CONNECTED:
-        if (!wifiConnected) {
-          wifiConnected = true;
-          Serial.println("[WIFI] Connected!");
-          Serial.print("[WIFI] IP: ");
-          Serial.println(WiFi.localIP());
-          
-          oledClear();
-          oledShowLine(0, "WiFi Connected!");
-          oledShowLine(1, "IP: " + WiFi.localIP().toString());
-          oledShowLine(3, "MiMo Chat Ready!");
-          oledShowLine(5, "Waiting input...");
-          
-          Serial.println("[OK] System ready. Type message:");
-          Serial.println();
-        }
-        break;
-        
-      case WL_DISCONNECTED:
-      case WL_CONNECT_FAILED:
-      case WL_NO_SSID_AVAIL:
-        if (wifiConnected) {
-          wifiConnected = false;
-          Serial.println("[WIFI] Disconnected!");
-          oledShowStatus("WiFi Lost!");
-        } else {
-          Serial.print("[WIFI] Status: ");
-          Serial.println(wifiStatus);
-        }
-        break;
-        
-      case WL_IDLE_STATUS:
-        Serial.println("[WIFI] Connecting...");
-        break;
-        
-      default:
-        Serial.print("[WIFI] Status: ");
-        Serial.println(wifiStatus);
-        break;
-    }
+    oledClear();
+    oledShowLine(0, "WiFi Connected!");
+    oledShowLine(1, "IP: " + WiFi.localIP().toString());
+    oledShowLine(3, "MiMo Chat Ready!");
+    oledShowLine(5, "Waiting input...");
+    
+    Serial.println("[OK] System ready. Type message:");
+    Serial.println();
+  } else if (!actuallyConnected && wifiConnected) {
+    wifiConnected = false;
+    Serial.println("[WIFI] Disconnected!");
+    oledShowStatus("WiFi Lost!");
   }
 }
 
