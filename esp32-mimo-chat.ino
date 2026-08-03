@@ -201,15 +201,15 @@ void oledShowChat(const String& role, const String& text) {
     display.println("> MiMo:");
   }
   
-  // 剩余行显示内容（自动截断）
-  display.setTextSize(1);
-  String displayText = text;
-  // 简单截断，每行约21个字符，共7行
-  int maxChars = 21 * 7;
-  if (displayText.length() > maxChars) {
-    displayText = displayText.substring(0, maxChars - 3) + "...";
-  }
-  display.println(displayText);
+  // 统计字符数和token估算
+  display.println("Msg: " + String(text.length()) + " chars");
+  
+  // 显示等待状态（中文内容在串口查看）
+  display.println("");
+  display.println("See Serial Monitor");
+  display.println("for full content.");
+  display.println("");
+  display.println("Baud: 115200");
   display.display();
 }
 
