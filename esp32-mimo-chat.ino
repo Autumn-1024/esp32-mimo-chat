@@ -13,7 +13,7 @@
 #include <Adafruit_SSD1306.h>
 #include "config.h"
 
-// Disable brownout detector (WiFi RF draws 240-500mA, USB may not supply enough)
+// Disable brownout detector
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
 
@@ -58,7 +58,6 @@ void handleKeys();
 //  SETUP
 // ============================================================
 void setup() {
-  // Disable brownout detector FIRST to prevent WiFi reboot
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
   
   Serial.begin(SERIAL_BAUD);
@@ -74,7 +73,6 @@ void setup() {
   setupOLED();
   setupKeys();
   
-  // Start WiFi (non-blocking)
   oledShowStatus("Connecting WiFi...");
   startWiFi();
   
@@ -103,7 +101,7 @@ void startWiFi() {
   Serial.println(WIFI_SSID);
   
   WiFi.mode(WIFI_STA);
-  WiFi.setTxPower(WIFI_POWER_5dBm);  // Reduce TX power to prevent brownout
+  WiFi.setTxPower(WIFI_POWER_5dBm);
   WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   
@@ -112,13 +110,11 @@ void startWiFi() {
 }
 
 void checkWiFi() {
-  // Check every 1 second
   if (millis() - wifiCheckTime < 1000) return;
   wifiCheckTime = millis();
   
   int currentStatus = WiFi.status();
   
-  // Status changed
   if (currentStatus != wifiStatus) {
     wifiStatus = currentStatus;
     
@@ -129,8 +125,6 @@ void checkWiFi() {
           Serial.println("[WIFI] Connected!");
           Serial.print("[WIFI] IP: ");
           Serial.println(WiFi.localIP());
-          Serial.print("[WIFI] RSSI: ");
-          Serial.println(WiFi.RSSI());
           
           oledClear();
           oledShowLine(0, "WiFi Connected!");
@@ -153,13 +147,11 @@ void checkWiFi() {
         } else {
           Serial.print("[WIFI] Status: ");
           Serial.println(wifiStatus);
-          oledShowStatus("WiFi status: " + String(wifiStatus));
         }
         break;
         
       case WL_IDLE_STATUS:
-        Serial.print("[WIFI] Connecting...");
-        oledShowStatus("Connecting...");
+        Serial.println("[WIFI] Connecting...");
         break;
         
       default:
@@ -167,15 +159,6 @@ void checkWiFi() {
         Serial.println(wifiStatus);
         break;
     }
-  }
-  
-  // Show dots while connecting
-  if (wifiStatus != WL_CONNECTED) {
-    static int dots = 0;
-    dots = (dots + 1) % 4;
-    String dotStr = "";
-    for (int i = 0; i < dots; i++) dotStr += ".";
-    Serial.println("[WIFI] Waiting" + dotStr);
   }
 }
 
@@ -273,10 +256,8 @@ void handleSerialInput() {
         inputBuffer.trim();
         
         if (inputBuffer.length() > 0) {
-          // Check WiFi before sending
           if (!wifiConnected || WiFi.status() != WL_CONNECTED) {
             Serial.println("[ERR] WiFi not connected yet");
-            Serial.println("[...] Please wait for WiFi...");
             inputBuffer = "";
             return;
           }
@@ -341,7 +322,6 @@ void handleKeys() {
     if (wifiConnected) {
       Serial.println("[KEY1] Send 'Hello'");
       inputBuffer = "Hello";
-      Serial.println(inputBuffer);
     } else {
       Serial.println("[KEY1] WiFi not ready");
     }
@@ -360,20 +340,14 @@ void handleKeys() {
     lastKeyTime = millis();
     Serial.println("[KEY3] Status:");
     Serial.print("  WiFi: ");
-    Serial.println(wifiConnected ? "Connected" : "Disconnected");
-    Serial.print("  Status code: ");
-    Serial.println(WiFi.status());
-    Serial.print("  History: ");
-    Serial.println(historyCount);
+    Serial.println(wifiConnected ? "OK" : "FAIL");
     Serial.print("  Heap: ");
     Serial.println(ESP.getFreeHeap());
     
     oledClear();
     oledShowLine(0, "Status:");
     oledShowLine(1, "WiFi: " + String(wifiConnected ? "OK" : "FAIL"));
-    oledShowLine(2, "Code: " + String(WiFi.status()));
-    oledShowLine(3, "History: " + String(historyCount));
-    oledShowLine(4, "Heap: " + String(ESP.getFreeHeap()));
+    oledShowLine(2, "Heap: " + String(ESP.getFreeHeap()));
     delay(2000);
     oledShowLine(5, "Waiting input...");
   }
