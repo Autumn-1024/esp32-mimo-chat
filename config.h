@@ -26,7 +26,7 @@
 #define KEY4_PIN      33
 
 // ============ API 参数 ============
-#define MAX_TOKENS    256
+#define MAX_TOKENS    1024
 #define TEMPERATURE   1.0
 #define TOP_P         0.95
 
