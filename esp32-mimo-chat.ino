@@ -502,7 +502,6 @@ String callMiMoAPI(const String& userInput) {
   
   // 边读边解析：找 "content":" 然后直接输出到串口
   String result = "";
-  result.reserve(256);
   bool inContent = false;
   bool escaped = false;
   char search[] = "\"content\":\"";
@@ -544,6 +543,8 @@ String callMiMoAPI(const String& userInput) {
   }
   
   client.stop();
+  delay(100);
+  yield(); // let system reclaim TLS memory
   
   unsigned long elapsed = millis() - startTime;
   Serial.print("[REQ] Done in ");
